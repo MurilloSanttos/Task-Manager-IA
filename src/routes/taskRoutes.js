@@ -17,4 +17,7 @@ router.get('/', authMiddleware, TaskController.listTasks);
 // Rota para deletar uma tarefa (DELETE /tasks/:id)
 router.delete('/:id', authMiddleware, TaskController.deleteTask);
 
+// NRota para obter tarefas próximas ao vencimento (GET /tasks/due)
+router.get('/due', authMiddleware, TaskController.getDueTasks);
+
 module.exports = router;

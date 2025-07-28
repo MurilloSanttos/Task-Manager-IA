@@ -1,4 +1,5 @@
 const db = require('../database/connection');
+const moment = require('moment');
 
 class TaskController {
     // Método para criar uma nova tarefa
@@ -180,6 +181,40 @@ class TaskController {
         } catch (error) {
             console.error('Erro ao deletar tarefa:', error);
             return res.status(500).json({ message: 'Erro interno do servidor ao deletar tarefa.' });
+        }
+    }
+
+    // Método para obter tarefas próximas ao vencimento
+    async getDueTasks(req, res) {
+        const { userId } = req; // ID do usuário logado
+        // Define quantos dias à frente quero verificar para tarefas "próximas ao vencimento".
+        // Pode vir como query param futuramente, mas para o MVP, vou fixar em 7 dias.
+        const daysAhead = parseInt(req.query.daysAhead) || 7; // Pega daysAhead da query ou usa 7 como padrão
+
+        try {
+            // Calcula a data de hoje e a data limite para a verificação
+            const now = moment().startOf('day'); // Começo do dia atual
+            const dueDateLimit = moment().add(daysAhead, 'days').endOf('day'); // Final do dia 'daysAhead' no futuro
+
+            // Busca tarefas do usuário logado que:
+            // 1. Têm um status que não é 'completed' ou 'cancelled'
+            // 2. Têm uma deadline definida (não nula)
+            // 3. A deadline está entre hoje e o limite de dias à frente
+            const dueTasks = await db('tasks')
+                .where({ user_id: userId })
+                .whereNotIn('status', ['completed', 'cancelled']) // Ignora tarefas concluídas ou canceladas
+                .whereNotNull('deadline')
+                .whereBetween('deadline', [now.toISOString(), dueDateLimit.toISOString()])
+                .orderBy('deadline', 'asc'); // Ordena pela data de vencimento mais próxima
+
+            return res.status(200).json({
+                message: `Tarefas com vencimento nos próximos ${daysAhead} dias.`,
+                tasks: dueTasks
+            });
+
+        } catch (error) {
+            console.error('Erro ao obter tarefas próximas ao vencimento:', error);
+            return res.status(500).json({ message: 'Erro interno do servidor ao obter alertas de vencimento.' });
         }
     }
 }

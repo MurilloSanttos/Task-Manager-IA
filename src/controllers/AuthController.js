@@ -1,6 +1,6 @@
-const bcrypt = require('bcryptjs'); // Para hashear senhas
-const jwt = require('jsonwebtoken'); // Importa a biblioteca jsonwebtoken
-const db = require('../database/connection'); // Conexão com o DB
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const db = require('../database/connection');
 
 class AuthController {
     // Método para registrar um novo usuário
@@ -72,7 +72,6 @@ class AuthController {
             // 3. Gerar um JSON Web Token (JWT)
             // O payload do token geralmente inclui informações do usuário (como o ID)
             // que não são sensíveis, mas são úteis para identificar o usuário.
-            // O JWT_SECRET deve ser uma variável de ambiente segura.
             const token = jwt.sign(
                 { id: user.id, email: user.email }, // Payload: dados que identificam o usuário
                 process.env.JWT_SECRET,             // Chave secreta para assinar o token
@@ -92,4 +91,4 @@ class AuthController {
     }
 }
 
-module.exports = new AuthController(); // Exporta uma instância da classe
+module.exports = new AuthController();

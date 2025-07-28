@@ -5,6 +5,9 @@ const db = require('./src/database/connection');
 const authRoutes = require('./src/routes/authRoutes');
 const authMiddleware = require('./src/middleware/authMiddleware');
 const passport = require('./src/config/passport');
+const taskRoutes = require('./src/routes/taskRoutes');
+const categoryRoutes = require('./src/routes/categoryRoutes');
+const tagRoutes = require('./src/routes/tagRoutes'); 
 
 const app = express();
 
@@ -17,22 +20,32 @@ app.get('/', (req, res) => {
     res.status(200).json({ message: 'Bem-vindo à API do Gerenciador de Tarefas com IA!' });
 });
 
-// Usar as Rotas de Autenticação
-app.use('/auth', authRoutes);
-
-// --- Exemplo de Rota Protegida ---
+// --- Rota Protegida ---
 // Esta rota usará o authMiddleware para garantir que o usuário está autenticado
-// --- Exemplo de Rota Protegida ---
-app.get('/protected', authMiddleware, (req, res) => {
+app.get('/protected', authMiddleware, (req, res) => { // <-- VERIFIQUE ESTA LINHA
+    // Se a requisição chegou aqui, significa que o token foi validado
+    // e as informações do usuário (req.userId, req.userEmail) estão disponíveis
     res.status(200).json({
         message: `Bem-vindo, usuário autenticado! Seu ID é: ${req.userId} e e-mail: ${req.userEmail}.`,
         userId: req.userId,
         userEmail: req.userEmail
     });
 });
-// --- Fim do Exemplo ---
+// --- Fim ---
 
-// Testar conexão com o banco de dados (opcional)
+// Usar as Rotas de Autenticação
+app.use('/auth', authRoutes);
+
+// Usar as Rotas de Tarefas
+app.use('/tasks', taskRoutes);
+
+// Usar as Rotas de Categorias (Protegidas)
+app.use('/categories', categoryRoutes);
+
+// Usar as Rotas de Tags (Protegidas)
+app.use('/tags', tagRoutes); 
+
+// Testar conexão com o banco de dados
 db.raw('SELECT 1+1 AS result')
   .then(() => console.log('Conexão com o banco de dados estabelecida com sucesso!'))
   .catch((err) => console.error('Erro ao conectar com o banco de dados:', err));

@@ -1,7 +1,7 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const db = require('../database/connection'); // Nossa conexão com o DB
-require('dotenv').config(); // Para acessar as variáveis de ambiente
+const db = require('../database/connection');
+require('dotenv').config();
 
 // Configuração da estratégia Google OAuth 2.0
 passport.use(new GoogleStrategy({
@@ -16,7 +16,7 @@ async (accessToken, refreshToken, profile, done) => {
         let user = await db('users').where({ google_id: profile.id }).first();
 
         if (user) {
-            // Se o usuário já existe, atualiza as informações se necessário (opcional)
+            // Se o usuário já existe, atualiza as informações se necessário
             // e retorna o usuário
             return done(null, user);
         } else {
@@ -29,7 +29,7 @@ async (accessToken, refreshToken, profile, done) => {
             const [userId] = await db('users').insert({
                 google_id: profile.id,
                 email: email, // O e-mail pode vir do Google Profile
-                // password_hash será nulo para usuários OAuth, ou posso gerar um hash de um UUID
+                // password_hash será nulo para usuários OAuth
             });
 
             user = await db('users').where({ id: userId }).first();

@@ -1,4 +1,4 @@
-require('dotenv').config(); // Carrega as variáveis de ambiente
+require('dotenv').config();
 
 module.exports = {
   development: {
@@ -17,7 +17,7 @@ module.exports = {
     migrations: {
       directory: './src/database/migrations'
     },
-    seeds: { // Opcional: para popular o DB com dados de teste
+    seeds: { // Para popular o DB com dados de teste
       directory: './src/database/seeds'
     },
     useNullAsDefault: true // Recomendado para SQLite para tratar valores padrão

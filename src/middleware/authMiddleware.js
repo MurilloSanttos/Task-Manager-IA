@@ -1,9 +1,8 @@
-const jwt = require('jsonwebtoken'); // Para verificar o token
-require('dotenv').config(); // Para acessar JWT_SECRET do .env
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 const authMiddleware = (req, res, next) => {
     // 1. Obter o token do cabeçalho da requisição
-    // O token geralmente vem no formato: "Bearer SEU_TOKEN_AQUI"
     const authHeader = req.headers.authorization;
 
     // Se não houver cabeçalho de autorização, ou ele não começar com 'Bearer'

@@ -229,6 +229,57 @@ class TaskController {
             return res.status(500).json({ message: 'Erro interno do servidor ao obter alertas de vencimento.' });
         }
     }
+
+    // Método para obter tarefas similares
+    async getSimilarTasks(req, res) {
+        const { userId } = req; // ID do usuário logado
+        const { taskId } = req.params; // ID da tarefa base para encontrar similares
+        const { description: queryDescription } = req.query; // Ou uma descrição fornecida diretamente na query param
+
+        let taskDescriptionToAnalyze = '';
+
+        try {
+            // Se um taskId for fornecido, busca a descrição da tarefa no banco de dados
+            if (taskId) {
+                const task = await db('tasks').where({ id: taskId, user_id: userId }).first();
+                if (!task) {
+                    return res.status(404).json({ message: 'Tarefa base não encontrada ou você não tem permissão para acessá-la.' });
+                }
+                taskDescriptionToAnalyze = task.description || task.title;
+            } else if (queryDescription) {
+                // Se uma descrição for fornecida via query param, usa essa descrição
+                taskDescriptionToAnalyze = queryDescription;
+            } else {
+                return res.status(400).json({ message: 'É necessário fornecer um taskId ou uma descrição (queryDescription) para buscar tarefas similares.' });
+            }
+
+            if (!taskDescriptionToAnalyze || taskDescriptionToAnalyze.trim() === '') {
+                 return res.status(400).json({ message: 'Não há texto para analisar similaridade da tarefa.' });
+            }
+
+            // Obter todas as tarefas ATIVAS do usuário para comparar
+            // Excluir a própria tarefa de base se for o caso
+            const allUserActiveTasks = await db('tasks')
+                .where({ user_id: userId })
+                .whereNotIn('status', ['completed', 'cancelled']); // Considera apenas tarefas ativas
+
+            const tasksToCompare = allUserActiveTasks.filter(task => task.id !== parseInt(taskId));
+
+
+            // Usar o AIService para sugerir tarefas similares
+            const similarTasks = AIService.suggestSimilarTasks(taskDescriptionToAnalyze, tasksToCompare);
+
+            return res.status(200).json({
+                message: 'Sugestões de tarefas similares.',
+                baseDescription: taskDescriptionToAnalyze,
+                similarTasks: similarTasks
+            });
+
+        } catch (error) {
+            console.error('Erro ao obter tarefas similares:', error);
+            return res.status(500).json({ message: 'Erro interno do servidor ao buscar tarefas similares.' });
+        }
+    }
 }
 
 module.exports = new TaskController();

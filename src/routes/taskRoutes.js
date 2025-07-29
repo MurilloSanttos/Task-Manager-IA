@@ -20,4 +20,7 @@ router.delete('/:id', authMiddleware, TaskController.deleteTask);
 // NRota para obter tarefas próximas ao vencimento (GET /tasks/due)
 router.get('/due', authMiddleware, TaskController.getDueTasks);
 
+// Rota para obter tarefas similares (GET /tasks/similar/:taskId ou /tasks/similar?description=...)
+router.get('/similar/:taskId?', authMiddleware, TaskController.getSimilarTasks);
+
 module.exports = router;

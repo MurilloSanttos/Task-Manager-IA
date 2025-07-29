@@ -17,23 +17,25 @@ app.use(cors());
 app.use(express.json());
 app.use(passport.initialize());
 
-// --- APLICAÇÃO DOS LIMITADORES ---
-
-// 1. Aplica o limitador mais restritivo nas rotas de autenticação
-app.use('/auth', authLimiter, authRoutes); // authLimiter será aplicado apenas às rotas de /auth
-
-// 2. Aplica o limitador geral para todas as outras rotas da API
-app.use(apiLimiter); // Aplica a todas as rotas que vêm depois, sem um limitador específico
-
-
 // Rota de teste (Health Check)
 app.get('/', (req, res) => {
     res.status(200).json({ message: 'Bem-vindo à API do Gerenciador de Tarefas com IA!' });
 });
 
+// --- APLICAÇÃO DOS LIMITADORES ---
+
+// Aplicação dos limitadores
+app.use('/auth', authLimiter, authRoutes);
+app.use(apiLimiter);
+
+// Usar as Rotas da Aplicação
+app.use('/tasks', taskRoutes);
+app.use('/categories', categoryRoutes);
+app.use('/tags', tagRoutes);
+
 // --- Rota Protegida ---
 // Esta rota usará o authMiddleware para garantir que o usuário está autenticado
-app.get('/protected', authMiddleware, (req, res) => { // <-- VERIFIQUE ESTA LINHA
+app.get('/protected', authMiddleware, (req, res) => {
     // Se a requisição chegou aqui, significa que o token foi validado
     // e as informações do usuário (req.userId, req.userEmail) estão disponíveis
     res.status(200).json({
@@ -44,15 +46,6 @@ app.get('/protected', authMiddleware, (req, res) => { // <-- VERIFIQUE ESTA LINH
 });
 // --- Fim ---
 
-// Usar as Rotas de Tarefas
-app.use('/tasks', taskRoutes);
-
-// Usar as Rotas de Categorias (Protegidas)
-app.use('/categories', categoryRoutes);
-
-// Usar as Rotas de Tags (Protegidas)
-app.use('/tags', tagRoutes); 
-
 // Testar conexão com o banco de dados
 db.raw('SELECT 1+1 AS result')
   .then(() => console.log('Conexão com o banco de dados estabelecida com sucesso!'))
@@ -61,8 +54,13 @@ db.raw('SELECT 1+1 AS result')
 // Definir a Porta do Servidor
 const PORT = process.env.PORT || 3001;
 
-// Iniciar o Servidor
-app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-    console.log(`Acesse: http://localhost:${PORT}`);
-});
+// Exporta a instância do Express 'app' e
+// Opcionalmente, inicia o servidor apenas se o arquivo for executado diretamente (não por import)
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Servidor rodando na porta ${PORT}`);
+        console.log(`Acesse: http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;

@@ -23,6 +23,26 @@ module.exports = {
     useNullAsDefault: true // Recomendado para SQLite para tratar valores padrão
   },
 
+  test: {
+    client: 'sqlite3',
+    connection: {
+      // O banco de dados de teste será um arquivo temporário 'test.sqlite3'
+      filename: './src/database/test.sqlite3'
+    },
+    pool: {
+      afterCreate: (conn, cb) => {
+        conn.run('PRAGMA foreign_keys = ON', cb);
+      }
+    },
+    migrations: {
+      directory: './src/database/migrations'
+    },
+    seeds: {
+      directory: './src/database/seeds'
+    },
+    useNullAsDefault: true
+  }
+
   // Configurações diferentes para staging e production
   // production: {
   //   client: 'sqlite3',

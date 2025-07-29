@@ -140,3 +140,4 @@ vite.config.ts.timestamp-*
 
 # Ignorar o banco de dados SQLite de desenvolvimento
 /src/database/dev.sqlite3
+/src/database/test.sqlite3

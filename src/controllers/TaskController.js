@@ -1,12 +1,12 @@
 const db = require('../database/connection');
 const moment = require('moment');
+const AIService = require('../services/AIService');
 
 class TaskController {
     // Método para criar uma nova tarefa
     async createTask(req, res) {
-        // req.userId é definido pelo nosso authMiddleware, garantindo que saiba quem é o usuário logado
         const { userId } = req;
-        const { title, description, deadline, priority, category_id, tags } = req.body;
+        let { title, description, deadline, priority, category_id, tags } = req.body; // 'priority' agora é 'let'
 
         // Validação básica
         if (!title) {
@@ -14,19 +14,22 @@ class TaskController {
         }
 
         try {
-            // 1. Inserir a tarefa principal
+            // Se a prioridade não for fornecida pelo usuário, sugere com IA
+            if (!priority) {
+                priority = AIService.suggestPriority(description || title); // Sugere com base na descrição ou título
+                console.log(`IA sugeriu prioridade: ${priority} para a tarefa "${title}"`);
+            }
+
             const [taskId] = await db('tasks').insert({
                 user_id: userId,
                 title,
                 description,
                 deadline,
-                priority,
-                category_id // Pode ser null
+                priority, // Usa a prioridade sugerida ou fornecida
+                category_id
             });
 
-            // 2. Lidar com as tags (se fornecidas)
             if (tags && tags.length > 0) {
-                // Para cada tag, inserimos uma entrada na tabela task_tags
                 const taskTagsToInsert = tags.map(tagId => ({
                     task_id: taskId,
                     tag_id: tagId
@@ -34,7 +37,6 @@ class TaskController {
                 await db('task_tags').insert(taskTagsToInsert);
             }
 
-            // 3. Retornar a tarefa criada
             const newTask = await db('tasks').where({ id: taskId }).first();
             return res.status(201).json({
                 message: 'Tarefa criada com sucesso!',
@@ -43,7 +45,6 @@ class TaskController {
 
         } catch (error) {
             console.error('Erro ao criar tarefa:', error);
-            // Verifica se o erro é de chave estrangeira inválida (categoria_id ou tag_id não existem)
             if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
                 return res.status(400).json({ message: 'Categoria ou tag(s) inválida(s). Verifique se existem.' });
             }
@@ -53,9 +54,9 @@ class TaskController {
 
     // Método para editar uma tarefa existente
     async updateTask(req, res) {
-        const { userId } = req; // ID do usuário logado
-        const { id } = req.params; // ID da tarefa a ser editada (vindo da URL)
-        const { title, description, deadline, priority, status, category_id, tags } = req.body;
+        const { userId } = req;
+        const { id } = req.params;
+        let { title, description, deadline, priority, status, category_id, tags } = req.body; // 'priority' agora é 'let'
 
         // Validação básica
         if (!title) {
@@ -63,11 +64,25 @@ class TaskController {
         }
 
         try {
-            // 1. Verificar se a tarefa existe e pertence ao usuário logado
             const task = await db('tasks').where({ id, user_id: userId }).first();
 
             if (!task) {
                 return res.status(404).json({ message: 'Tarefa não encontrada ou você não tem permissão para editá-la.' });
+            }
+
+            // Se a prioridade NÃO for fornecida explicitamente na atualização,
+            // e a descrição/título foi alterada ou prioridade é nula,
+            // sugere uma nova prioridade com IA.
+            // Para simplicidade no MVP, vou sempre sugerir se não for fornecida.
+            if (!priority) { // Se a prioridade não foi explicitamente definida na requisição PUT
+                // Usa a descrição ou título fornecido na requisição, ou os existentes na tarefa
+                const textToAnalyze = description || title || task.description || task.title;
+                if (textToAnalyze) {
+                   priority = AIService.suggestPriority(textToAnalyze);
+                   console.log(`IA sugeriu prioridade: ${priority} para a tarefa "${title || task.title}" na atualização`);
+                } else {
+                   priority = task.priority; // Mantém a prioridade existente se não houver texto para analisar
+                }
             }
 
             // 2. Atualizar os dados da tarefa principal
@@ -77,26 +92,23 @@ class TaskController {
                     title,
                     description,
                     deadline,
-                    priority,
+                    priority, // Usa a prioridade sugerida ou fornecida
                     status,
                     category_id,
-                    updated_at: db.fn.now() // Atualiza a data de atualização
+                    updated_at: db.fn.now()
                 });
 
-            // 3. Lidar com as tags
-            if (tags !== undefined) { // Permite que 'tags' seja um array vazio para remover todas
-                await db('task_tags').where({ task_id: id }).del(); // Remove todas as tags antigas da tarefa
-
+            if (tags !== undefined) {
+                await db('task_tags').where({ task_id: id }).del();
                 if (tags.length > 0) {
                     const taskTagsToInsert = tags.map(tagId => ({
                         task_id: id,
                         tag_id: tagId
                     }));
-                    await db('task_tags').insert(taskTagsToInsert); // Insere as novas tags
+                    await db('task_tags').insert(taskTagsToInsert);
                 }
             }
 
-            // 4. Retornar a tarefa atualizada
             const updatedTask = await db('tasks').where({ id }).first();
             return res.status(200).json({
                 message: 'Tarefa atualizada com sucesso!',

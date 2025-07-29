@@ -151,6 +151,81 @@ class AIService {
         // Ordena por score de similaridade decrescente e limita o número de sugestões
         return similarities.sort((a, b) => b.similarityScore - a.similarityScore).slice(0, 5); // Sugere as 5 mais similares
     }
+
+    // Método de Reescrita Inteligente de Títulos
+    /**
+     * Sugere uma reescrita mais clara ou completa para um título de tarefa.
+     * Esta é uma implementação baseada em regras para o MVP.
+     * @param {string} originalTitle - O título original da tarefa.
+     * @returns {string} - O título reescrito ou o original se nenhuma regra se aplicar.
+     */
+    rewriteTitle(originalTitle) {
+        if (!originalTitle || originalTitle.trim() === '') {
+            return originalTitle; // Retorna o original se estiver vazio
+        }
+
+        let rewrittenTitle = originalTitle.trim();
+        const lowerCaseTitle = rewrittenTitle.toLowerCase();
+
+        // Regras de reescrita baseadas em padrões comuns
+        // 1. Títulos genéricos/incompletos
+        if (lowerCaseTitle === 'fazer' || lowerCaseTitle === 'resolver' || lowerCaseTitle === 'verificar') {
+            return `${rewrittenTitle} [Detalhes Necessários]`;
+        }
+        if (lowerCaseTitle.includes('reunião')) {
+            if (!lowerCaseTitle.includes('com') && !lowerCaseTitle.includes('sobre')) {
+                return `Reunião: [Assunto e Participantes]`;
+            }
+        }
+        if (lowerCaseTitle.includes('email') || lowerCaseTitle.includes('e-mail')) {
+             if (!lowerCaseTitle.includes('responder') && !lowerCaseTitle.includes('enviar')) {
+                return `Enviar/Responder E-mail: [Assunto/Destinatário]`;
+            }
+        }
+        if (lowerCaseTitle.includes('bug') && !lowerCaseTitle.includes('corrigir') && !lowerCaseTitle.includes('resolver')) {
+            return `Corrigir Bug: [Nome do Módulo/Problema]`;
+        }
+        if (lowerCaseTitle.includes('relatório')) {
+             if (!lowerCaseTitle.includes('fazer') && !lowerCaseTitle.includes('finalizar')) {
+                return `Finalizar Relatório: [Tipo de Relatório]`;
+            }
+        }
+        if (lowerCaseTitle.includes('código') && !lowerCaseTitle.includes('revisar') && !lowerCaseTitle.includes('escrever')) {
+            return `Revisar/Escrever Código: [Módulo/Funcionalidade]`;
+        }
+
+        // 2. Padronização (Exemplos)
+        // Padronizar "fix bug" para "Corrigir Bug"
+        if (lowerCaseTitle.includes('fix bug')) {
+            rewrittenTitle = rewrittenTitle.replace(/fix bug/i, 'Corrigir Bug');
+        }
+        // Padronizar "implementar" para "Implementar" no início
+        if (lowerCaseTitle.startsWith('implementar')) {
+            rewrittenTitle = 'Implementar ' + rewrittenTitle.substring('implementar'.length).trim();
+        }
+
+        // 3. Adicionar detalhes sugeridos (muito básico)
+        if (lowerCaseTitle.includes('pesquisar')) {
+            if (!lowerCaseTitle.includes('sobre')) {
+                rewrittenTitle += ' sobre [Assunto Específico]';
+            }
+        }
+        if (lowerCaseTitle.includes('criar')) {
+            if (!lowerCaseTitle.includes('para')) {
+                rewrittenTitle += ' para [Propósito]';
+            }
+        }
+
+        // Remover espaços extras
+        rewrittenTitle = rewrittenTitle.replace(/\s+/g, ' ').trim();
+
+        // Capitalizar a primeira letra, se for uma frase completa (heurística simples)
+        if (rewrittenTitle.length > 0) {
+            rewrittenTitle = rewrittenTitle.charAt(0).toUpperCase() + rewrittenTitle.slice(1);
+        }
+
+        return rewrittenTitle;
+    }
 }
 
 // Exporta uma única instância do AIService

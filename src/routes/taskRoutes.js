@@ -23,4 +23,7 @@ router.get('/due', authMiddleware, TaskController.getDueTasks);
 // Rota para obter tarefas similares (GET /tasks/similar/:taskId ou /tasks/similar?description=...)
 router.get('/similar/:taskId?', authMiddleware, TaskController.getSimilarTasks);
 
+// Rota para sugerir reescrita de título (GET /tasks/rewrite-title?title=...)
+router.get('/rewrite-title', authMiddleware, TaskController.suggestTitleRewrite);
+
 module.exports = router;

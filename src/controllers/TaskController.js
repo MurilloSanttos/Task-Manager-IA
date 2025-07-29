@@ -280,6 +280,29 @@ class TaskController {
             return res.status(500).json({ message: 'Erro interno do servidor ao buscar tarefas similares.' });
         }
     }
+
+    // Método para Sugerir reescrita de título
+    async suggestTitleRewrite(req, res) {
+        const { title } = req.query; // Pega o título da query string (ex: /tasks/rewrite-title?title=...)
+
+        if (!title || title.trim() === '') {
+            return res.status(400).json({ message: 'O título é obrigatório para sugestão de reescrita.' });
+        }
+
+        try {
+            const suggestedTitle = AIService.rewriteTitle(title);
+
+            return res.status(200).json({
+                originalTitle: title,
+                suggestedTitle: suggestedTitle,
+                message: 'Sugestão de reescrita de título gerada.'
+            });
+
+        } catch (error) {
+            console.error('Erro ao sugerir reescrita de título:', error);
+            return res.status(500).json({ message: 'Erro interno do servidor ao sugerir reescrita de título.' });
+        }
+    }
 }
 
 module.exports = new TaskController();

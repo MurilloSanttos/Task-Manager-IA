@@ -9,11 +9,22 @@ const taskRoutes = require('./src/routes/taskRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
 const tagRoutes = require('./src/routes/tagRoutes'); 
 
+const { apiLimiter, authLimiter } = require('./src/config/rateLimit');
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(passport.initialize());
+
+// --- APLICAÇÃO DOS LIMITADORES ---
+
+// 1. Aplica o limitador mais restritivo nas rotas de autenticação
+app.use('/auth', authLimiter, authRoutes); // authLimiter será aplicado apenas às rotas de /auth
+
+// 2. Aplica o limitador geral para todas as outras rotas da API
+app.use(apiLimiter); // Aplica a todas as rotas que vêm depois, sem um limitador específico
+
 
 // Rota de teste (Health Check)
 app.get('/', (req, res) => {
@@ -32,9 +43,6 @@ app.get('/protected', authMiddleware, (req, res) => { // <-- VERIFIQUE ESTA LINH
     });
 });
 // --- Fim ---
-
-// Usar as Rotas de Autenticação
-app.use('/auth', authRoutes);
 
 // Usar as Rotas de Tarefas
 app.use('/tasks', taskRoutes);

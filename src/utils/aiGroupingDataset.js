@@ -10,6 +10,8 @@ const groupingTrainingData = [
     "Correção de bugs na interface do usuário (UI)",
     "Testar compatibilidade do site em diferentes navegadores",
     "Adicionar animações suaves aos elementos da página",
+    "Configurar sistema de rotas no React Router Dom",
+    "Estilizar botões e inputs usando Tailwind CSS",
 
     // Tema: Desenvolvimento Back-end
     "Desenvolver endpoint REST para cadastro de usuários",
@@ -22,6 +24,8 @@ const groupingTrainingData = [
     "Desenvolver lógica de agendamento de tarefas",
     "Integrar API externa de pagamentos",
     "Configurar ambiente de deploy em nuvem (Docker/Kubernetes)",
+    "Criar testes de integração para endpoints de usuário",
+    "Implementar cache de dados para consultas frequentes",
 
     // Tema: Gerenciamento de Projetos
     "Reunião de planejamento semanal com a equipe",

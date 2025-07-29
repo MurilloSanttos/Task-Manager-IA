@@ -26,4 +26,7 @@ router.get('/similar/:taskId?', authMiddleware, TaskController.getSimilarTasks);
 // Rota para sugerir reescrita de título (GET /tasks/rewrite-title?title=...)
 router.get('/rewrite-title', authMiddleware, TaskController.suggestTitleRewrite);
 
+// Rota para geração de resumo diário (GET /tasks/summary/daily)
+router.get('/summary/daily', authMiddleware, TaskController.getDailySummary);
+
 module.exports = router;

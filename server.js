@@ -9,6 +9,8 @@ const taskRoutes = require('./src/routes/taskRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
 const tagRoutes = require('./src/routes/tagRoutes'); 
 
+const aiRoutes = require('./src/routes/aiRoutes');
+
 const { apiLimiter, authLimiter } = require('./src/config/rateLimit');
 
 const app = express();
@@ -17,21 +19,20 @@ app.use(cors());
 app.use(express.json());
 app.use(passport.initialize());
 
+// Aplicação dos limitadores
+app.use('/auth', authLimiter, authRoutes);
+app.use(apiLimiter);
+
 // Rota de teste (Health Check)
 app.get('/', (req, res) => {
     res.status(200).json({ message: 'Bem-vindo à API do Gerenciador de Tarefas com IA!' });
 });
 
-// --- APLICAÇÃO DOS LIMITADORES ---
-
-// Aplicação dos limitadores
-app.use('/auth', authLimiter, authRoutes);
-app.use(apiLimiter);
-
 // Usar as Rotas da Aplicação
 app.use('/tasks', taskRoutes);
 app.use('/categories', categoryRoutes);
 app.use('/tags', tagRoutes);
+app.use('/ai', aiRoutes);
 
 // --- Rota Protegida ---
 // Esta rota usará o authMiddleware para garantir que o usuário está autenticado

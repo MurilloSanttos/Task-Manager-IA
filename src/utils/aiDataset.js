@@ -10,7 +10,8 @@ const trainingData = [
     { text: "Revisar relatório de erros críticos", priority: "urgent" },
     { text: "Pagamento de fornecedor pendente, precisa ser hoje", priority: "urgent" },
     { text: "Backup de dados corrompido, restaurar urgente", priority: "urgent" },
-
+    { text: "Servidor fora do ar, verificar conexão", priority: "urgent" },
+    { text: "Vulnerabilidade de segurança grave", priority: "urgent" },
 
     // Prioridade High
     { text: "Preparar apresentação para reunião com diretoria amanhã", priority: "high" },
@@ -23,6 +24,8 @@ const trainingData = [
     { text: "Escrever documentação técnica de nova API", priority: "high" },
     { text: "Entrevistar candidato para vaga de desenvolvedor", priority: "high" },
     { text: "Configurar ambiente de homologação para testes", priority: "high" },
+    { text: "Revisar o código antes do deploy", priority: "high" },
+    { text: "Finalizar feature X para a próxima entrega", priority: "high" },
 
     // Prioridade Medium
     { text: "Organizar a caixa de entrada de e-mails", priority: "medium" },

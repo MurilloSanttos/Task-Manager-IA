@@ -303,6 +303,85 @@ class TaskController {
             return res.status(500).json({ message: 'Erro interno do servidor ao sugerir reescrita de título.' });
         }
     }
+
+    // Método para Geração de Resumo Diário
+    async getDailySummary(req, res) {
+        const { userId } = req; // ID do usuário logado
+        // Para o resumo diário, vou focar no dia atual.
+        const todayStart = moment().startOf('day').toISOString();
+        const todayEnd = moment().endOf('day').toISOString();
+        const now = moment().toISOString();
+
+        try {
+            // 1. Tarefas do Dia (com deadline hoje e não completas/canceladas)
+            const tasksForToday = await db('tasks')
+                .where({ user_id: userId })
+                .whereNotIn('status', ['completed', 'cancelled'])
+                .whereNotNull('deadline')
+                .whereBetween('deadline', [todayStart, todayEnd])
+                .orderBy('deadline', 'asc');
+
+            // 2. Tarefas Atrasadas (deadline no passado e status pendente/em progresso)
+            const overdueTasks = await db('tasks')
+                .where({ user_id: userId })
+                .whereNotIn('status', ['completed', 'cancelled'])
+                .whereNotNull('deadline')
+                .where('deadline', '<', now) // Deadline é anterior a agora
+                .orderBy('deadline', 'asc');
+
+            // 3. Tarefas que podem ser reagendadas (Lógica heurística para MVP)
+            // Para o MVP, considerei reagendáveis:
+            // a) Tarefas que estão atrasadas, mas não "muito" (ex: menos de 7 dias atrasadas)
+            // b) Tarefas que tem prioridade baixa/media e estão vencendo hoje, mas parecem "grandes" ou "bloqueadas"
+            // Para simplificar, vou focar em tarefas atrasadas que ainda não foram marcadas como concluídas/canceladas.
+            // Poderia adicionar mais IA aqui, mas para MVP, vou usar um filtro básico.
+            const potentiallyRescheduleTasks = overdueTasks.filter(task => {
+                // Filtro exemplo: tarefa atrasada há menos de 7 dias
+                const daysOverdue = moment().diff(moment(task.deadline), 'days');
+                return daysOverdue <= 7;
+            });
+
+            // 4. Tarefas sem Prioridade Definida (status 'pending' ou 'in_progress' e priority é 'medium' - valor padrão)
+            // Ou tarefas onde 'priority' é explicitamente NULL, se permitir.
+            const tasksWithoutDefinedPriority = await db('tasks')
+                .where({ user_id: userId, priority: 'medium' }) // Assume 'medium' é o default/não definido
+                .whereNotIn('status', ['completed', 'cancelled'])
+                .orderBy('created_at', 'asc'); // Ordena pelas mais antigas para revisão
+
+            // Filtrar as tarefas sem prioridade que já não estão em tasksForToday ou overdueTasks,
+            // para evitar duplicatas no resumo.
+            const allSummarizedTaskIds = new Set([
+                ...tasksForToday.map(t => t.id),
+                ...overdueTasks.map(t => t.id),
+                ...potentiallyRescheduleTasks.map(t => t.id)
+            ]);
+            const uniqueTasksWithoutDefinedPriority = tasksWithoutDefinedPriority.filter(
+                task => !allSummarizedTaskIds.has(task.id)
+            );
+
+            // Montar o objeto de resumo
+            const dailySummary = {
+                date: moment().format('YYYY-MM-DD'),
+                totalTasksToday: tasksForToday.length,
+                tasksForToday,
+                totalOverdueTasks: overdueTasks.length,
+                overdueTasks,
+                totalPotentiallyRescheduleTasks: potentiallyRescheduleTasks.length,
+                potentiallyRescheduleTasks,
+                totalTasksWithoutDefinedPriority: uniqueTasksWithoutDefinedPriority.length,
+                tasksWithoutDefinedPriority: uniqueTasksWithoutDefinedPriority
+            };
+
+            return res.status(200).json({
+                message: 'Resumo diário gerado com sucesso!',
+                summary: dailySummary
+            });
+
+        } catch (error) {
+            console.error('Erro ao gerar resumo diário:', error);
+            return res.status(500).json({ message: 'Erro interno do servidor ao gerar resumo diário.' });
+        }
+    }
 }
 
 module.exports = new TaskController();

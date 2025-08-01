@@ -1,57 +1,70 @@
+// Carrega as variáveis de ambiente do arquivo .env.
 require('dotenv').config();
 
+/**
+ * @type { Object.<string, import("knex").Knex.Config> }
+ */
 module.exports = {
+
+  // ====================================================================
+  // Ambiente de Desenvolvimento (development)
+  // Utilizado para o desenvolvimento local do aplicativo.
+  // ====================================================================
   development: {
-    client: 'sqlite3',
+    client: 'sqlite3', // Define o cliente do banco de dados como SQLite3
     connection: {
-      // O banco de dados será um arquivo chamado 'dev.sqlite3' dentro da pasta 'src/database'
+      // O banco de dados será um arquivo chamado 'dev.sqlite3'
+      // localizado dentro da pasta 'src/database'.
       filename: './src/database/dev.sqlite3'
     },
-    // Configura o uso de chaves estrangeiras para SQLite
-    // Necessário para manter a integridade referencial
+    // Configuração do pool para SQLite3:
+    // Garante que as chaves estrangeiras (FOREIGN KEYS) sejam ativadas.
+    // Isso é VITAL para a integridade referencial no SQLite.
     pool: {
       afterCreate: (conn, cb) => {
         conn.run('PRAGMA foreign_keys = ON', cb);
       }
     },
+    // Define o diretório onde os arquivos de migração estão localizados.
     migrations: {
       directory: './src/database/migrations'
     },
-    seeds: { // Para popular o DB com dados de teste
-      directory: './src/database/seeds'
+    // Define o diretório para arquivos de "seeds" (população de dados de teste),
+    // que são úteis para preencher o DB com dados iniciais.
+    seeds: {
+      directory: './src/database/seeds' // Ainda não uso seeds, mas é bom ter
     },
-    useNullAsDefault: true // Recomendado para SQLite para tratar valores padrão
+    // Recomendado para SQLite para lidar com valores padrão de colunas.
+    useNullAsDefault: true
   },
 
+  // ====================================================================
+  // Ambiente de Teste (test)
+  // Utilizado especificamente para a execução dos testes automatizados.
+  // Garante um banco de dados limpo e isolado para cada rodada de testes.
+  // ====================================================================
   test: {
-    client: 'sqlite3',
+    client: 'sqlite3', // Cliente SQLite3
     connection: {
-      // O banco de dados de teste será um arquivo temporário 'test.sqlite3'
+      // Um banco de dados SEPARADO para testes, 'test.sqlite3'.
+      // Isso evita que os testes poluam ou dependam dos dados de desenvolvimento.
       filename: './src/database/test.sqlite3'
     },
+    // Ativa as chaves estrangeiras para o banco de dados de teste.
     pool: {
       afterCreate: (conn, cb) => {
         conn.run('PRAGMA foreign_keys = ON', cb);
       }
     },
+    // As migrações são as mesmas para todos os ambientes.
     migrations: {
       directory: './src/database/migrations'
     },
+    // Seeds também podem ser usados em testes para preparar dados específicos.
     seeds: {
       directory: './src/database/seeds'
     },
+    // Recomendado para SQLite.
     useNullAsDefault: true
-  }
-
-  // Configurações diferentes para staging e production
-  // production: {
-  //   client: 'sqlite3',
-  //   connection: {
-  //     filename: './src/database/prod.sqlite3'
-  //   },
-  //   migrations: {
-  //     directory: './src/database/migrations'
-  //   },
-  //   useNullAsDefault: true
-  // }
+  },
 };

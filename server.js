@@ -1,67 +1,45 @@
+// Carregar variáveis de ambiente
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+
+// Importar o aplicativo Express configurado (de src/app.js)
+const app = require('./src/app');
+
+// Importar a conexão com o banco de dados
 const db = require('./src/database/connection');
-const authRoutes = require('./src/routes/authRoutes');
-const authMiddleware = require('./src/middleware/authMiddleware');
-const passport = require('./src/config/passport');
-const taskRoutes = require('./src/routes/taskRoutes');
-const categoryRoutes = require('./src/routes/categoryRoutes');
-const tagRoutes = require('./src/routes/tagRoutes'); 
 
-const aiRoutes = require('./src/routes/aiRoutes');
+// Importar a instância do AIService (que é exportada por src/app.js)
+// Esta instância será a *real* na execução normal, sem mocks complexos em testes.
+const aiService = require('./src/app').aiService;
 
-const { apiLimiter, authLimiter } = require('./src/config/rateLimit');
+// Definir a Porta do Servidor
+// Pega a porta da variável de ambiente PORT, ou usa 3001 como padrão.
+const PORT = process.env.PORT || 3001;
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-app.use(passport.initialize());
-
-// Aplicação dos limitadores
-app.use('/auth', authLimiter, authRoutes);
-app.use(apiLimiter);
-
-// Rota de teste (Health Check)
-app.get('/', (req, res) => {
-    res.status(200).json({ message: 'Bem-vindo à API do Gerenciador de Tarefas com IA!' });
-});
-
-// Usar as Rotas da Aplicação
-app.use('/tasks', taskRoutes);
-app.use('/categories', categoryRoutes);
-app.use('/tags', tagRoutes);
-app.use('/ai', aiRoutes);
-
-// --- Rota Protegida ---
-// Esta rota usará o authMiddleware para garantir que o usuário está autenticado
-app.get('/protected', authMiddleware, (req, res) => {
-    // Se a requisição chegou aqui, significa que o token foi validado
-    // e as informações do usuário (req.userId, req.userEmail) estão disponíveis
-    res.status(200).json({
-        message: `Bem-vindo, usuário autenticado! Seu ID é: ${req.userId} e e-mail: ${req.userEmail}.`,
-        userId: req.userId,
-        userEmail: req.userEmail
-    });
-});
-// --- Fim ---
-
-// Testar conexão com o banco de dados
+// Testar conexão com o banco de dados (para depuração na inicialização)
+// Isso ajuda a verificar se o DB está acessível quando o servidor tenta iniciar.
 db.raw('SELECT 1+1 AS result')
   .then(() => console.log('Conexão com o banco de dados estabelecida com sucesso!'))
   .catch((err) => console.error('Erro ao conectar com o banco de dados:', err));
 
-// Definir a Porta do Servidor
-const PORT = process.env.PORT || 3001;
-
-// Exporta a instância do Express 'app' e
-// Opcionalmente, inicia o servidor apenas se o arquivo for executado diretamente (não por import)
+// Inicializar os modelos de IA
+// Os modelos de IA (prioridade, agrupamento) serão treinados APENAS UMA VEZ
+// quando o `server.js` for o módulo principal (ou seja, quando o aplicativo é realmente iniciado,
+// e não quando é importado por um teste ou outro módulo).
 if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Servidor rodando na porta ${PORT}`);
-        console.log(`Acesse: http://localhost:${PORT}`);
-    });
+    console.log('Ambiente de execução principal detectado. Inicializando modelos de IA...');
+    aiService.initializeModels();
+} else {
+    console.log('Ambiente de teste ou importação detectado. Modelos de IA não serão inicializados aqui.');
 }
 
-module.exports = app;
+// Iniciar o Servidor HTTP
+// app.listen() retorna uma instância do servidor HTTP.
+// Exportei esta instância para que o Supertest possa fechar o servidor após os testes.
+const server = app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Acesse: http://localhost:${PORT}`);
+});
+
+// Exportar o servidor para uso em testes
+// Nos testes de integração, eles importarão 'server' para testar as rotas.
+module.exports = server;

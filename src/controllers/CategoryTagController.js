@@ -1,12 +1,26 @@
-const db = require('../database/connection');
+const db = require('../database/connection'); // Conexão com o banco de dados
 
+/**
+ * @class CategoryTagController
+ * @description Controlador responsável por gerenciar operações
+ * relacionadas a Categorias e Tags.
+ */
 class CategoryTagController {
-    // Método para criar uma nova categoria
+    // Este controlador não interage com o AIService,
+    // então não precisa importá-lo ou ter um construtor que o receba.
+
+    /**
+     * @method createCategory
+     * @description Cria uma nova categoria para o usuário autenticado.
+     * Garante que não haja categorias duplicadas para o mesmo usuário.
+     * @param {Object} req - Objeto de requisição (contém req.userId do authMiddleware).
+     * @param {Object} res - Objeto de resposta.
+     */
     async createCategory(req, res) {
-        const { userId } = req; // ID do usuário logado, do authMiddleware
+        const { userId } = req; // ID do usuário do token JWT
         const { name } = req.body;
 
-        // Validação básica
+        // Validação básica: nome da categoria é obrigatório
         if (!name) {
             return res.status(400).json({ message: 'O nome da categoria é obrigatório.' });
         }
@@ -40,12 +54,18 @@ class CategoryTagController {
         }
     }
 
-    // Método para criar uma nova tag
+    /**
+     * @method createTag
+     * @description Cria uma nova tag para o usuário autenticado.
+     * Garante que não haja tags duplicadas para o mesmo usuário.
+     * @param {Object} req - Objeto de requisição (contém req.userId do authMiddleware).
+     * @param {Object} res - Objeto de resposta.
+     */
     async createTag(req, res) {
-        const { userId } = req; // ID do usuário logado, do authMiddleware
+        const { userId } = req; // ID do usuário do token JWT
         const { name } = req.body;
 
-        // Validação básica
+        // Validação básica: nome da tag é obrigatório
         if (!name) {
             return res.status(400).json({ message: 'O nome da tag é obrigatório.' });
         }
@@ -80,4 +100,5 @@ class CategoryTagController {
     }
 }
 
+// Exporta uma instância do CategoryTagController.
 module.exports = new CategoryTagController();

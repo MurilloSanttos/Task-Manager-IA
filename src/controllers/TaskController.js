@@ -1,35 +1,50 @@
-const db = require('../database/connection');
-const moment = require('moment');
-const AIService = require('../services/AIService');
+const db = require('../database/connection'); // Conexão com o banco de dados
+const moment = require('moment'); // Para manipulação de datas
+const aiService = require('../app').aiService; // Importa a instância do AIService de src/app.js
 
+/**
+ * @class TaskController
+ * @description Controlador responsável por gerenciar todas as operações
+ * relacionadas a tarefas (CRUD, alertas, similaridade, resumo diário).
+ */
 class TaskController {
-    // Método para criar uma nova tarefa
-    async createTask(req, res) {
-        const { userId } = req;
-        let { title, description, deadline, priority, category_id, tags } = req.body; // 'priority' agora é 'let'
 
-        // Validação básica
+    /**
+     * @method createTask
+     * @description Cria uma nova tarefa para o usuário autenticado.
+     * Sugere prioridade com IA se não for fornecida.
+     * @param {Object} req - Objeto de requisição (contém req.userId do authMiddleware).
+     * @param {Object} res - Objeto de resposta.
+     */
+    async createTask(req, res) {
+        const { userId } = req; // ID do usuário do token JWT
+        let { title, description, deadline, priority, category_id, tags } = req.body;
+
+        // Validação básica: título é obrigatório
         if (!title) {
             return res.status(400).json({ message: 'O título da tarefa é obrigatório.' });
         }
 
         try {
-            // Se a prioridade não for fornecida pelo usuário, sugere com IA
+            // Se a prioridade NÃO foi fornecida pelo usuário, a IA sugere
             if (!priority) {
-                priority = AIService.suggestPriority(description || title); // Sugere com base na descrição ou título
+                priority = aiService.suggestPriority(description || title); // Usa aiService
                 console.log(`IA sugeriu prioridade: ${priority} para a tarefa "${title}"`);
             }
 
+            // Inserir a tarefa principal no banco de dados
             const [taskId] = await db('tasks').insert({
                 user_id: userId,
                 title,
                 description,
                 deadline,
-                priority, // Usa a prioridade sugerida ou fornecida
-                category_id
+                priority,
+                category_id // Pode ser null
             });
 
+            // Lidar com as tags (se fornecidas)
             if (tags && tags.length > 0) {
+                // Prepara as entradas para a tabela de ligação task_tags
                 const taskTagsToInsert = tags.map(tagId => ({
                     task_id: taskId,
                     tag_id: tagId
@@ -37,6 +52,7 @@ class TaskController {
                 await db('task_tags').insert(taskTagsToInsert);
             }
 
+            // Retornar a tarefa criada
             const newTask = await db('tasks').where({ id: taskId }).first();
             return res.status(201).json({
                 message: 'Tarefa criada com sucesso!',
@@ -45,6 +61,7 @@ class TaskController {
 
         } catch (error) {
             console.error('Erro ao criar tarefa:', error);
+            // Captura erros de chave estrangeira (categoria ou tag inválida)
             if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
                 return res.status(400).json({ message: 'Categoria ou tag(s) inválida(s). Verifique se existem.' });
             }
@@ -52,11 +69,62 @@ class TaskController {
         }
     }
 
-    // Método para editar uma tarefa existente
+    /**
+     * @method listTasks
+     * @description Lista as tarefas do usuário autenticado, com opções de filtro.
+     * @param {Object} req - Objeto de requisição (req.userId, req.query para filtros).
+     * @param {Object} res - Objeto de resposta.
+     */
+    async listTasks(req, res) {
+        const { userId } = req;
+        // Filtros da query string
+        const { status, priority, deadline_before, deadline_after } = req.query;
+
+        try {
+            let query = db('tasks')
+                .where({ user_id: userId }); // Sempre filtra por usuário
+
+            // Aplica filtros se fornecidos
+            if (status) {
+                query = query.where({ status });
+            }
+            if (priority) {
+                query = query.where({ priority });
+            }
+            if (deadline_before) {
+                query = query.where('deadline', '<=', deadline_before);
+            }
+            if (deadline_after) {
+                query = query.where('deadline', '>=', deadline_after);
+            }
+
+            // Ordenação padrão
+            query = query.orderBy('deadline', 'asc').orderBy('priority', 'desc');
+
+            const tasks = await query;
+
+            return res.status(200).json({
+                message: 'Tarefas listadas com sucesso!',
+                tasks: tasks
+            });
+
+        } catch (error) {
+            console.error('Erro ao listar tarefas:', error);
+            return res.status(500).json({ message: 'Erro interno do servidor ao listar tarefas.' });
+        }
+    }
+
+    /**
+     * @method updateTask
+     * @description Atualiza uma tarefa existente do usuário autenticado.
+     * Pode sugerir nova prioridade com IA se o campo for omitido.
+     * @param {Object} req - Objeto de requisição (req.userId, req.params.id para ID da tarefa).
+     * @param {Object} res - Objeto de resposta.
+     */
     async updateTask(req, res) {
         const { userId } = req;
-        const { id } = req.params;
-        let { title, description, deadline, priority, status, category_id, tags } = req.body; // 'priority' agora é 'let'
+        const { id } = req.params; // ID da tarefa da URL
+        let { title, description, deadline, priority, status, category_id, tags } = req.body;
 
         // Validação básica
         if (!title) {
@@ -64,51 +132,52 @@ class TaskController {
         }
 
         try {
+            // Verificar se a tarefa existe E pertence ao usuário logado (segurança!)
             const task = await db('tasks').where({ id, user_id: userId }).first();
 
             if (!task) {
                 return res.status(404).json({ message: 'Tarefa não encontrada ou você não tem permissão para editá-la.' });
             }
 
-            // Se a prioridade NÃO for fornecida explicitamente na atualização,
-            // e a descrição/título foi alterada ou prioridade é nula,
-            // sugere uma nova prioridade com IA.
-            // Para simplicidade no MVP, vou sempre sugerir se não for fornecida.
-            if (!priority) { // Se a prioridade não foi explicitamente definida na requisição PUT
+            // Se a prioridade NÃO foi fornecida explicitamente na atualização, a IA sugere
+            if (!priority) {
                 // Usa a descrição ou título fornecido na requisição, ou os existentes na tarefa
                 const textToAnalyze = description || title || task.description || task.title;
                 if (textToAnalyze) {
-                   priority = AIService.suggestPriority(textToAnalyze);
+                   priority = aiService.suggestPriority(textToAnalyze); // Usa aiService
                    console.log(`IA sugeriu prioridade: ${priority} para a tarefa "${title || task.title}" na atualização`);
                 } else {
                    priority = task.priority; // Mantém a prioridade existente se não houver texto para analisar
                 }
             }
 
-            // 2. Atualizar os dados da tarefa principal
+            // Atualizar os dados da tarefa principal
             await db('tasks')
                 .where({ id })
                 .update({
                     title,
                     description,
                     deadline,
-                    priority, // Usa a prioridade sugerida ou fornecida
+                    priority,
                     status,
                     category_id,
-                    updated_at: db.fn.now()
+                    updated_at: db.fn.now() // Atualiza a data de atualização
                 });
 
-            if (tags !== undefined) {
-                await db('task_tags').where({ task_id: id }).del();
+            // Lidar com as tags (remover antigas e adicionar novas)
+            if (tags !== undefined) { // Permite que 'tags' seja um array vazio para remover todas
+                await db('task_tags').where({ task_id: id }).del(); // Remove todas as tags antigas da tarefa
+
                 if (tags.length > 0) {
                     const taskTagsToInsert = tags.map(tagId => ({
                         task_id: id,
                         tag_id: tagId
                     }));
-                    await db('task_tags').insert(taskTagsToInsert);
+                    await db('task_tags').insert(taskTagsToInsert); // Insere as novas tags
                 }
             }
 
+            // Retornar a tarefa atualizada
             const updatedTask = await db('tasks').where({ id }).first();
             return res.status(200).json({
                 message: 'Tarefa atualizada com sucesso!',
@@ -122,73 +191,31 @@ class TaskController {
             }
             return res.status(500).json({ message: 'Erro interno do servidor ao atualizar tarefa.' });
         }
-    }
+    }   
 
-    // Método para listar tarefas com filtros
-    async listTasks(req, res) {
-        const { userId } = req; // ID do usuário logado, do authMiddleware
-        // Obtém os parâmetros de filtro da query string (ex: /tasks?status=pending&priority=high)
-        const { status, priority, deadline_before, deadline_after } = req.query;
-
-        try {
-            // Inicia a query para buscar tarefas do usuário logado
-            let query = db('tasks')
-                .where({ user_id: userId });
-
-            // Aplica filtros se eles forem fornecidos
-            if (status) {
-                query = query.where({ status });
-            }
-            if (priority) {
-                query = query.where({ priority });
-            }
-            // Filtro por data limite: tarefas com deadline antes de uma data específica
-            if (deadline_before) {
-                query = query.where('deadline', '<=', deadline_before);
-            }
-            // Filtro por data limite: tarefas com deadline depois de uma data específica
-            if (deadline_after) {
-                query = query.where('deadline', '>=', deadline_after);
-            }
-
-            // Adicionar ordenação padrão (ex: por data limite ou prioridade)
-            query = query.orderBy('deadline', 'asc').orderBy('priority', 'desc');
-
-            // Executa a query
-            const tasks = await query;
-
-            // Retorna as tarefas encontradas
-            return res.status(200).json({
-                message: 'Tarefas listadas com sucesso!',
-                tasks: tasks
-            });
-
-        } catch (error) {
-            console.error('Erro ao listar tarefas:', error);
-            return res.status(500).json({ message: 'Erro interno do servidor ao listar tarefas.' });
-        }
-    }
-
-    // Método para deletar uma tarefa
+    /**
+     * @method deleteTask
+     * @description Exclui uma tarefa do usuário autenticado.
+     * @param {Object} req - Objeto de requisição (req.userId, req.params.id para ID da tarefa).
+     * @param {Object} res - Objeto de resposta.
+     */
     async deleteTask(req, res) {
-        const { userId } = req; // ID do usuário logado, do authMiddleware
-        const { id } = req.params; // ID da tarefa a ser deletada (vindo da URL)
+        const { userId } = req;
+        const { id } = req.params;
 
         try {
-            // 1. Verificar se a tarefa existe e pertence ao usuário logado
-            // É crucial garantir que o usuário só possa deletar suas próprias tarefas
+            // Verifica se a tarefa existe e pertence ao usuário para exclusão segura
             const deletedRows = await db('tasks')
                 .where({ id, user_id: userId })
-                .del(); // O método .del() retorna o número de linhas deletadas
+                .del(); // Retorna o número de linhas deletadas
 
             if (deletedRows === 0) {
-                // Se 0 linhas foram deletadas, a tarefa não foi encontrada
-                // ou não pertence ao usuário autenticado.
+                // Se 0 linhas foram deletadas, a tarefa não foi encontrada ou não pertence ao usuário.
                 return res.status(404).json({ message: 'Tarefa não encontrada ou você não tem permissão para deletá-la.' });
             }
 
-            // 2. Retornar uma resposta de sucesso
-            return res.status(204).send(); // Status 204 No Content para operações de exclusão bem-sucedidas sem retorno de conteúdo
+            // Retorna status 204 No Content para exclusão bem-sucedida sem conteúdo.
+            return res.status(204).send();
 
         } catch (error) {
             console.error('Erro ao deletar tarefa:', error);
@@ -196,28 +223,26 @@ class TaskController {
         }
     }
 
-    // Método para obter tarefas próximas ao vencimento
+    /**
+     * @method getDueTasks
+     * @description Obtém tarefas do usuário que vencem em um período próximo (alertas de vencimento).
+     * @param {Object} req - Objeto de requisição (req.userId, req.query.daysAhead opcional).
+     * @param {Object} res - Objeto de resposta.
+     */
     async getDueTasks(req, res) {
-        const { userId } = req; // ID do usuário logado
-        // Define quantos dias à frente quero verificar para tarefas "próximas ao vencimento".
-        // Pode vir como query param futuramente, mas para o MVP, vou fixar em 7 dias.
-        const daysAhead = parseInt(req.query.daysAhead) || 7; // Pega daysAhead da query ou usa 7 como padrão
+        const { userId } = req;
+        const daysAhead = parseInt(req.query.daysAhead) || 7; // Padrão: 7 dias
+
+        const now = moment().startOf('day');
+        const dueDateLimit = moment().add(daysAhead, 'days').endOf('day');
 
         try {
-            // Calcula a data de hoje e a data limite para a verificação
-            const now = moment().startOf('day'); // Começo do dia atual
-            const dueDateLimit = moment().add(daysAhead, 'days').endOf('day'); // Final do dia 'daysAhead' no futuro
-
-            // Busca tarefas do usuário logado que:
-            // 1. Têm um status que não é 'completed' ou 'cancelled'
-            // 2. Têm uma deadline definida (não nula)
-            // 3. A deadline está entre hoje e o limite de dias à frente
             const dueTasks = await db('tasks')
                 .where({ user_id: userId })
-                .whereNotIn('status', ['completed', 'cancelled']) // Ignora tarefas concluídas ou canceladas
-                .whereNotNull('deadline')
+                .whereNotIn('status', ['completed', 'cancelled']) // Ignora tarefas já concluídas ou canceladas
+                .whereNotNull('deadline') // Apenas tarefas com deadline definida
                 .whereBetween('deadline', [now.toISOString(), dueDateLimit.toISOString()])
-                .orderBy('deadline', 'asc'); // Ordena pela data de vencimento mais próxima
+                .orderBy('deadline', 'asc');
 
             return res.status(200).json({
                 message: `Tarefas com vencimento nos próximos ${daysAhead} dias.`,
@@ -230,16 +255,21 @@ class TaskController {
         }
     }
 
-    // Método para obter tarefas similares
+    /**
+     * @method getSimilarTasks
+     * @description Sugere tarefas similares a uma tarefa existente ou a uma descrição de texto.
+     * @param {Object} req - Objeto de requisição (req.userId, req.params.taskId ou req.query.description).
+     * @param {Object} res - Objeto de resposta.
+     */
     async getSimilarTasks(req, res) {
-        const { userId } = req; // ID do usuário logado
-        const { taskId } = req.params; // ID da tarefa base para encontrar similares
-        const { description: queryDescription } = req.query; // Ou uma descrição fornecida diretamente na query param
+        const { userId } = req;
+        const { taskId } = req.params; // ID da tarefa base
+        const { description: queryDescription } = req.query; // Descrição fornecida
 
         let taskDescriptionToAnalyze = '';
 
         try {
-            // Se um taskId for fornecido, busca a descrição da tarefa no banco de dados
+            // Prioriza taskId, senão usa queryDescription
             if (taskId) {
                 const task = await db('tasks').where({ id: taskId, user_id: userId }).first();
                 if (!task) {
@@ -247,7 +277,6 @@ class TaskController {
                 }
                 taskDescriptionToAnalyze = task.description || task.title;
             } else if (queryDescription) {
-                // Se uma descrição for fornecida via query param, usa essa descrição
                 taskDescriptionToAnalyze = queryDescription;
             } else {
                 return res.status(400).json({ message: 'É necessário fornecer um taskId ou uma descrição (queryDescription) para buscar tarefas similares.' });
@@ -257,17 +286,16 @@ class TaskController {
                  return res.status(400).json({ message: 'Não há texto para analisar similaridade da tarefa.' });
             }
 
-            // Obter todas as tarefas ATIVAS do usuário para comparar
-            // Excluir a própria tarefa de base se for o caso
+            // Obtém todas as tarefas ATIVAS do usuário para comparar
             const allUserActiveTasks = await db('tasks')
                 .where({ user_id: userId })
-                .whereNotIn('status', ['completed', 'cancelled']); // Considera apenas tarefas ativas
+                .whereNotIn('status', ['completed', 'cancelled']); // Não inclui tarefas concluídas ou canceladas
 
+            // Filtra a própria tarefa de base da lista de comparação (se for o caso)
             const tasksToCompare = allUserActiveTasks.filter(task => task.id !== parseInt(taskId));
 
-
-            // Usar o AIService para sugerir tarefas similares
-            const similarTasks = AIService.suggestSimilarTasks(taskDescriptionToAnalyze, tasksToCompare);
+            // Usa a instância do AIService para encontrar tarefas similares
+            const similarTasks = aiService.suggestSimilarTasks(taskDescriptionToAnalyze, tasksToCompare); // Usa aiService
 
             return res.status(200).json({
                 message: 'Sugestões de tarefas similares.',
@@ -281,16 +309,22 @@ class TaskController {
         }
     }
 
-    // Método para Sugerir reescrita de título
+    /**
+     * @method suggestTitleRewrite
+     * @description Sugere uma reescrita mais clara ou completa para um título de tarefa usando IA.
+     * @param {Object} req - Objeto de requisição (req.query.title para o título original).
+     * @param {Object} res - Objeto de resposta.
+     */
     async suggestTitleRewrite(req, res) {
-        const { title } = req.query; // Pega o título da query string (ex: /tasks/rewrite-title?title=...)
+        const { title } = req.query; // Título original da query string
 
         if (!title || title.trim() === '') {
             return res.status(400).json({ message: 'O título é obrigatório para sugestão de reescrita.' });
         }
 
         try {
-            const suggestedTitle = AIService.rewriteTitle(title);
+            // Usa a instância do AIService para reescrever o título
+            const suggestedTitle = aiService.rewriteTitle(title); // Usa aiService
 
             return res.status(200).json({
                 originalTitle: title,
@@ -304,16 +338,21 @@ class TaskController {
         }
     }
 
-    // Método para Geração de Resumo Diário
+    /**
+     * @method getDailySummary
+     * @description Gera um resumo diário das tarefas do usuário, categorizando-as.
+     * @param {Object} req - Objeto de requisição (req.userId).
+     * @param {Object} res - Objeto de resposta.
+     */
     async getDailySummary(req, res) {
-        const { userId } = req; // ID do usuário logado
-        // Para o resumo diário, vou focar no dia atual.
+        const { userId } = req;
+        // Define as datas de hoje para as consultas
         const todayStart = moment().startOf('day').toISOString();
         const todayEnd = moment().endOf('day').toISOString();
         const now = moment().toISOString();
 
         try {
-            // 1. Tarefas do Dia (com deadline hoje e não completas/canceladas)
+            // Tarefas do Dia (com deadline hoje e não completas/canceladas)
             const tasksForToday = await db('tasks')
                 .where({ user_id: userId })
                 .whereNotIn('status', ['completed', 'cancelled'])
@@ -321,35 +360,27 @@ class TaskController {
                 .whereBetween('deadline', [todayStart, todayEnd])
                 .orderBy('deadline', 'asc');
 
-            // 2. Tarefas Atrasadas (deadline no passado e status pendente/em progresso)
+            // Tarefas Atrasadas (deadline no passado e status pendente/em progresso)
             const overdueTasks = await db('tasks')
                 .where({ user_id: userId })
                 .whereNotIn('status', ['completed', 'cancelled'])
                 .whereNotNull('deadline')
-                .where('deadline', '<', now) // Deadline é anterior a agora
+                .where('deadline', '<', now)
                 .orderBy('deadline', 'asc');
 
-            // 3. Tarefas que podem ser reagendadas (Lógica heurística para MVP)
-            // Para o MVP, considerei reagendáveis:
-            // a) Tarefas que estão atrasadas, mas não "muito" (ex: menos de 7 dias atrasadas)
-            // b) Tarefas que tem prioridade baixa/media e estão vencendo hoje, mas parecem "grandes" ou "bloqueadas"
-            // Para simplificar, vou focar em tarefas atrasadas que ainda não foram marcadas como concluídas/canceladas.
-            // Poderia adicionar mais IA aqui, mas para MVP, vou usar um filtro básico.
+            // Tarefas que podem ser reagendadas (atrasadas há menos de 7 dias)
             const potentiallyRescheduleTasks = overdueTasks.filter(task => {
-                // Filtro exemplo: tarefa atrasada há menos de 7 dias
                 const daysOverdue = moment().diff(moment(task.deadline), 'days');
-                return daysOverdue <= 7;
+                return daysOverdue <= 7; // Tarefas atrasadas há no máximo 7 dias
             });
 
-            // 4. Tarefas sem Prioridade Definida (status 'pending' ou 'in_progress' e priority é 'medium' - valor padrão)
-            // Ou tarefas onde 'priority' é explicitamente NULL, se permitir.
+            // Tarefas sem Prioridade Definida (com status ativo e prioridade padrão 'medium')
             const tasksWithoutDefinedPriority = await db('tasks')
                 .where({ user_id: userId, priority: 'medium' }) // Assume 'medium' é o default/não definido
                 .whereNotIn('status', ['completed', 'cancelled'])
                 .orderBy('created_at', 'asc'); // Ordena pelas mais antigas para revisão
 
-            // Filtrar as tarefas sem prioridade que já não estão em tasksForToday ou overdueTasks,
-            // para evitar duplicatas no resumo.
+            // Filtra as tarefas sem prioridade que já não estão em outras categorias do resumo
             const allSummarizedTaskIds = new Set([
                 ...tasksForToday.map(t => t.id),
                 ...overdueTasks.map(t => t.id),
@@ -359,7 +390,7 @@ class TaskController {
                 task => !allSummarizedTaskIds.has(task.id)
             );
 
-            // Montar o objeto de resumo
+            // Monta o objeto de resumo diário
             const dailySummary = {
                 date: moment().format('YYYY-MM-DD'),
                 totalTasksToday: tasksForToday.length,
@@ -384,4 +415,5 @@ class TaskController {
     }
 }
 
+// Exporta uma instância do TaskController.
 module.exports = new TaskController();

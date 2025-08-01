@@ -50,7 +50,7 @@ Certifique-se de ter instalado:
 
 ### 1. Clonar o Repositório
 ```bash
-git clone <https://github.com/MurilloSanttos/Task-Manager-IA>
+git clone https://github.com/MurilloSanttos/Task-Manager-IA
 cd task-manager-ia
 ```
 
